@@ -49,7 +49,16 @@ export async function createPglite(dataDir?: string): Promise<Database> {
 export async function createPostgres(url: string): Promise<Database> {
   const { default: postgres } = await import("postgres");
   // prepare: false → compatible avec le pooler Supabase en mode transaction (port 6543).
-  const sql = postgres(url, { prepare: false, max: 5, idle_timeout: 20, onnotice: () => {} });
+  const sql = postgres(url, {
+    prepare: false,
+    max: 5,
+    idle_timeout: 20,
+    // realtime.send() avale ses erreurs (ex. partition du jour absente) et ne lève qu'un WARNING :
+    // on le fait remonter dans les logs, sinon les signaux Realtime se perdraient en silence.
+    onnotice: (n) => {
+      if (n.severity === "WARNING") console.warn("postgres:", n.message);
+    },
+  });
   // postgres.js sérialise lui-même les paramètres typés json/jsonb : une chaîne JSON passée à
   // « $1::jsonb » serait ré-encodée (stockée comme chaîne JSON). On force donc « $1::text::jsonb ».
   const fixJsonb = (text: string) => text.replace(/(\$\d+)::jsonb/g, "$1::text::jsonb");
