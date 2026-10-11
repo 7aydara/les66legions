@@ -148,24 +148,41 @@ Régénère le PDF dès que le domaine définitif est connu.
    - lance `supabase db push`.
 
    La migration est idempotente.
-2. Récupère dans Supabase :
-   - *Project Settings → Database → Connection string → Transaction pooler* (port **6543**) : c'est `DATABASE_URL` ;
-   - *Project Settings → API* : l'URL donne `NEXT_PUBLIC_SUPABASE_URL`, la clé `anon` donne `NEXT_PUBLIC_SUPABASE_ANON_KEY` et la clé `service_role` donne `SUPABASE_SERVICE_ROLE_KEY` (secrète, serveur uniquement).
-3. **Vercel** : importe le dépôt (framework Next.js détecté automatiquement), puis ajoute ces variables d'environnement :
+2. **Rôle de l'application** (recommandé). Au lieu du mot de passe `postgres` et de la clé `service_role`, l'application se connecte avec un rôle dédié. Dans le *SQL Editor*, en remplaçant le mot de passe :
+
+   ```sql
+   create role l66_app login bypassrls password 'UN-MOT-DE-PASSE-FORT';
+   grant usage on schema public to l66_app;
+   grant select, insert, update, delete on all tables in schema public to l66_app;
+   grant usage, select on all sequences in schema public to l66_app;
+   alter default privileges in schema public grant select, insert, update, delete on tables to l66_app;
+   alter default privileges in schema public grant usage, select on sequences to l66_app;
+   -- Realtime : le serveur émet ses signaux « refresh » par la fonction SQL realtime.send().
+   grant usage on schema realtime to l66_app;
+   grant execute on function realtime.send(jsonb, text, text, boolean) to l66_app;
+   grant insert on realtime.messages to l66_app;
+   ```
+
+   `bypassrls` est nécessaire parce que toutes les tables ont la RLS activée sans aucune policy.
+3. Récupère dans Supabase :
+   - l'URL du **Transaction pooler** (bouton *Connect*, port **6543**), avec l'utilisateur `l66_app.<ref-du-projet>` et son mot de passe : c'est `DATABASE_URL` ;
+   - *Project Settings → API* : l'URL du projet donne `NEXT_PUBLIC_SUPABASE_URL`, la clé `anon` donne `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+4. **Vercel** : importe le dépôt (framework Next.js détecté automatiquement), puis ajoute ces variables d'environnement :
 
    | Variable | Valeur |
    | --- | --- |
-   | `DATABASE_URL` | `postgresql://postgres.xxx:…@….pooler.supabase.com:6543/postgres` |
-   | `NEXT_PUBLIC_SUPABASE_URL` | `https://xxx.supabase.co` |
+   | `DATABASE_URL` | `postgresql://l66_app.<ref>:<mot-de-passe>@aws-…-eu-west-3.pooler.supabase.com:6543/postgres` |
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | clé anon |
-   | `SUPABASE_SERVICE_ROLE_KEY` | clé service_role |
    | `MJ_PASSWORD` | mot de passe du panneau MJ |
    | `NEXT_PUBLIC_BASE_URL` | `https://ton-domaine.fr` (URL finale) |
 
+   `SUPABASE_SERVICE_ROLE_KEY` est facultative. Si elle est fournie, les signaux passent par l'API REST Broadcast au lieu de `realtime.send()`.
+
    Ne mets **pas** `ALLOW_TIME_WARP`, sauf sur un déploiement de répétition.
-4. Déploie. Ouvre `/mj` (la partie s'initialise au premier appel), puis `/screen` sur la TV.
-5. Génère les QR avec l'URL de prod (`npm run qr`) et imprime.
-6. Pour une répétition sur le déploiement : ajoute temporairement `ALLOW_TIME_WARP=1`, puis lance `BOT_BASE_URL=https://… MJ_PASSWORD=… npm run bots`.
+5. Déploie. Ouvre `/mj` (la partie s'initialise au premier appel), puis `/screen` sur la TV.
+6. Génère les QR avec l'URL de prod (`npm run qr`) et imprime.
+7. Pour une répétition sur le déploiement : ajoute temporairement `ALLOW_TIME_WARP=1`, puis lance `BOT_BASE_URL=https://… MJ_PASSWORD=… npm run bots`.
 
 > Le soir de la partie, le panneau MJ doit rester ouvert : c'est lui qui appelle `/api/tick` chaque seconde.
 

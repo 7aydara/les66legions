@@ -768,6 +768,8 @@ export async function mjScreen(database: Database, forced: { mode: string; text?
 export async function tick(database: Database) {
   return withGame(database, async (ctx) => {
     await runTick(ctx);
+    // Un tick sans effet (le cas de presque toutes les secondes) ne diffuse rien, pas même au MJ.
+    ctx.notify.mj = ctx.notify.screen || ctx.notify.everyone || ctx.notify.players.size > 0;
     return { ok: true, now: ctx.now, phase: ctx.game.phase };
   });
 }
