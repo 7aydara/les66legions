@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #050505;
+  --gold: #c9a24a;
+  --blood: #9b111e;
+  --bone: #efe6d2;
+  --violet: #6b3fa0;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-gold: var(--gold);
+  --color-blood: var(--blood);
+  --color-bone: var(--bone);
+  --color-violet: var(--violet);
+  --font-gothic: "UnifrakturCook", "Cinzel", serif;
+  --font-title: "Cinzel", serif;
+  --font-body: "EB Garamond", Georgia, serif;
+}
+
+html, body {
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--font-body);
+}
+
+.btn {
+  @apply rounded-lg border border-gold/60 px-4 py-3 font-title text-base tracking-wide text-gold active:scale-[0.98] disabled:opacity-40;
+}
+.btn-blood {
+  @apply rounded-lg bg-blood px-4 py-3 font-title text-base tracking-wide text-bone active:scale-[0.98] disabled:opacity-40;
+}
+.card {
+  @apply rounded-xl border border-white/10 bg-white/[0.03] p-4;
+}
+.input {
+  @apply w-full rounded-lg border border-white/20 bg-black px-3 py-3 text-lg text-bone outline-none focus:border-gold;
+}
