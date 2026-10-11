@@ -9,16 +9,16 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 export async function POST(req: NextRequest, ctx: RouteContext<"/api/mj/[op]">) {
   const { op } = await ctx.params;
   const b = await body(req);
-  const database = await db();
-  if (op === "login") {
-    if (!(await mjConfigured(database))) return json({ error: "Mot de passe MJ non configuré (MJ_PASSWORD ou npm run mj:password)" }, 500);
-    if (!(await checkMjPassword(database, str(b.password)))) return json({ error: "Mot de passe incorrect" }, 401);
-    const res = NextResponse.json({ ok: true });
-    await setMjCookie(database, req, res);
-    return res;
-  }
-  if (!(await isMj(database, req))) return json({ error: "MJ uniquement" }, 401);
   return handle(async () => {
+    const database = await db();
+    if (op === "login") {
+      if (!(await mjConfigured(database))) return json({ error: "Mot de passe MJ non configuré (MJ_PASSWORD ou npm run mj:password)" }, 500);
+      if (!(await checkMjPassword(database, str(b.password)))) return json({ error: "Mot de passe incorrect" }, 401);
+      const res = NextResponse.json({ ok: true });
+      await setMjCookie(database, req, res);
+      return res;
+    }
+    if (!(await isMj(database, req))) return json({ error: "MJ uniquement" }, 401);
     switch (op) {
       case "reset": return E.resetGame(database, { keepPlayers: b.keepPlayers === true }).then(() => ({ ok: true }));
       case "assign-roles": return E.assignRoles(database, { roles: Array.isArray(b.roles) ? b.roles.map(String) : undefined });

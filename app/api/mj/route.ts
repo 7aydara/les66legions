@@ -4,7 +4,9 @@ import { isMj } from "@/lib/auth";
 import { mjView } from "@/lib/game/views";
 
 export async function GET(req: NextRequest) {
-  const database = await db();
-  if (!(await isMj(database, req))) return json({ error: "MJ uniquement" }, 401);
-  return handle(async () => mjView(database));
+  return handle(async () => {
+    const database = await db();
+    if (!(await isMj(database, req))) return json({ error: "MJ uniquement" }, 401);
+    return mjView(database);
+  });
 }
