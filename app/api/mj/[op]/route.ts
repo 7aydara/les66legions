@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { body, db, handle, json } from "@/lib/api";
-import { checkMjPassword, isMj, setMjCookie } from "@/lib/auth";
+import { checkMjPassword, isMj, mjConfigured, setMjCookie } from "@/lib/auth";
 import * as E from "@/lib/game/engine";
 import { GameError } from "@/lib/game/errors";
 
@@ -9,16 +9,16 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 export async function POST(req: NextRequest, ctx: RouteContext<"/api/mj/[op]">) {
   const { op } = await ctx.params;
   const b = await body(req);
+  const database = await db();
   if (op === "login") {
-    if (!process.env.MJ_PASSWORD) return json({ error: "MJ_PASSWORD n'est pas configuré" }, 500);
-    if (!checkMjPassword(str(b.password))) return json({ error: "Mot de passe incorrect" }, 401);
+    if (!(await mjConfigured(database))) return json({ error: "Mot de passe MJ non configuré (MJ_PASSWORD ou npm run mj:password)" }, 500);
+    if (!(await checkMjPassword(database, str(b.password)))) return json({ error: "Mot de passe incorrect" }, 401);
     const res = NextResponse.json({ ok: true });
-    setMjCookie(req, res);
+    await setMjCookie(database, req, res);
     return res;
   }
-  if (!isMj(req)) return json({ error: "MJ uniquement" }, 401);
+  if (!(await isMj(database, req))) return json({ error: "MJ uniquement" }, 401);
   return handle(async () => {
-    const database = await db();
     switch (op) {
       case "reset": return E.resetGame(database, { keepPlayers: b.keepPlayers === true }).then(() => ({ ok: true }));
       case "assign-roles": return E.assignRoles(database, { roles: Array.isArray(b.roles) ? b.roles.map(String) : undefined });

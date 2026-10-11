@@ -4,6 +4,7 @@ import { isMj } from "@/lib/auth";
 import { tick } from "@/lib/game/engine";
 
 export async function POST(req: NextRequest) {
-  if (!isMj(req)) return json({ error: "MJ uniquement" }, 401);
-  return handle(async () => tick(await db()));
+  const database = await db();
+  if (!(await isMj(database, req))) return json({ error: "MJ uniquement" }, 401);
+  return handle(async () => tick(database));
 }

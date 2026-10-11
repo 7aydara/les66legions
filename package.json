@@ -11,7 +11,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "bots": "tsx scripts/bots.ts",
     "qr": "tsx scripts/generate-qr.ts",
-    "db:migrate": "tsx scripts/migrate.ts"
+    "db:migrate": "tsx scripts/migrate.ts",
+    "mj:password": "tsx scripts/mj-password.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
