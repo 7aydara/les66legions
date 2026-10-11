@@ -39,6 +39,11 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/mj/[op]">) 
         if (action !== "shift" && action !== "now" && action !== "cancel") throw new GameError("Action inconnue");
         return E.mjEvent(database, str(b.eventId), action, Number(b.seconds) || 0);
       }
+      case "alert": {
+        const decision = str(b.decision);
+        if (decision !== "continue" && decision !== "verdict") throw new GameError("Décision inconnue");
+        return E.mjDecideAlert(database, str(b.kind), decision);
+      }
       case "screen": return E.mjScreen(database, b.mode ? { mode: str(b.mode), text: b.text ? str(b.text) : undefined } : null);
       default: throw new GameError("Action inconnue", 404);
     }

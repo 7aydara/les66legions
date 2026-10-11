@@ -6,6 +6,7 @@
 //   npm run bots                        → 30 joueurs sur http://localhost:3000
 //   BOT_PLAYERS=24 npm run bots         → 24 joueurs (4 agents)
 //   BOT_BASE_URL=https://… npm run bots → contre un déploiement (avec ALLOW_TIME_WARP=1 !)
+//   BOT_ON_VICTORY=verdict npm run bots → le MJ choisit « Passer au verdict » à la 1re victoire immédiate
 //
 // Les bots n'agissent QUE par les routes joueur (/q, /api/me/*), comme de vrais téléphones.
 // Le script lit l'état MJ comme « oracle » pour décider (qui est mort, qui est de la Légion…)
@@ -22,6 +23,8 @@ const N = Number(process.env.BOT_PLAYERS ?? 30);
 const STEP = Number(process.env.BOT_STEP ?? 5);
 const SEED = Number(process.env.BOT_SEED ?? Date.now() % 100000);
 const PASSWORD = process.env.MJ_PASSWORD ?? "";
+/** Décision du MJ face à une victoire immédiate : « continue » (défaut) ou « verdict ». */
+const ON_VICTORY = process.env.BOT_ON_VICTORY === "verdict" ? "verdict" : "continue";
 
 // PRNG déterministe (mulberry32) pour rejouer une partie avec BOT_SEED.
 let seed = SEED;
@@ -61,7 +64,7 @@ interface MjState {
   killsOpen: boolean;
   cooldownUntil: number;
   gauge: number;
-  alerts: { kind: string; text: string }[];
+  alerts: { kind: string; text: string; decision?: string }[];
   players: MjPlayer[];
   council: null | { id: string; stage: string; trigger: string; result: { kind: string; targetId: string | null } | null };
   events: { label: string; status: string; at: number }[];
@@ -166,6 +169,16 @@ async function main() {
     }
     if (s.clock.phase === "finale") break;
     if (step > 100000) throw new Error("Boucle infinie ?");
+
+    // Alertes MJ : tant qu'aucune décision n'est prise, l'écran ne doit rien annoncer.
+    for (const a of s.alerts.filter((x) => !x.decision)) {
+      const screen = JSON.stringify((await http("GET", "/api/screen")).json);
+      if (/victoire|_win/i.test(screen)) throw new Error(`L'écran annonce une victoire avant la décision du MJ : ${screen}`);
+      const decision = ["legion_win", "witness_win"].includes(a.kind) ? ON_VICTORY : "continue";
+      await mj("alert", { kind: a.kind, decision });
+      console.log(`  T+${fmt(now)} alerte MJ « ${a.text} » → ${decision === "verdict" ? "Passer au verdict" : "Continuer"}`);
+    }
+    if (s.alerts.some((x) => !x.decision)) continue; // l'état a changé : on relit au pas suivant
 
     const players = s.players.filter((p) => p.role);
     const alive = players.filter((p) => p.status === "alive");
@@ -298,7 +311,7 @@ async function main() {
   console.log(`Missions : ${stats.missionsOk} validées, ${stats.missionsWrong} ratées · jauge ${Math.round(s.gauge * 100)} %`);
   console.log(`Statuts : ${count("alive")} vivants, ${count("corpse")} corps, ${count("spirit")} Esprits`);
   console.log(`Événements : ${s.events.map((e) => `${e.label}=${e.status}`).join(" · ")}`);
-  console.log(`Alertes MJ : ${s.alerts.map((a) => a.text).join(" | ") || "aucune"}`);
+  console.log(`Alertes MJ : ${s.alerts.map((a) => `${a.text} [${a.decision}]`).join(" | ") || "aucune"}`);
   console.log(`Requêtes ${stats.requests} (dont ${stats.gameErrors} refus de jeu 4xx attendus), durée ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   console.log("OK : partie simulée de bout en bout sans erreur.");
 }

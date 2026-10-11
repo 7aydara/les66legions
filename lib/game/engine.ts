@@ -828,18 +828,68 @@ async function processEvents(ctx: Ctx) {
   }
 }
 
-/** Victoires immédiates (§4.10) : en v1, annoncées au MJ uniquement. */
+/**
+ * Victoires immédiates (§4.10). Elles n'arrêtent jamais la partie : le MJ reçoit une alerte et choisit
+ * « Continuer » ou « Passer au verdict » (mjDecideAlert).
+ * Parité : agents vivants ≥ non-Légion vivants (Témoins + Neutres, évacués et exilés inclus).
+ */
 async function checkVictory(ctx: Ctx) {
   if (!ctx.game.launched || !isAct(ctx.game.phase)) return;
-  const [r] = await ctx.db.query<{ legion: number; witness: number }>(
+  const [r] = await ctx.db.query<{ legion: number; others: number }>(
     `select count(*) filter (where camp = 'legion' and status = 'alive')::int as legion,
-            count(*) filter (where camp = 'witness' and status = 'alive')::int as witness
+            count(*) filter (where camp <> 'legion' and status = 'alive')::int as others
        from players where role is not null`);
   let changed = false;
   if (r.legion === 0) changed = addAlert(ctx, "witness_win", "Tous les agents de la Légion sont éliminés : victoire immédiate des Témoins.") || changed;
-  if (r.legion > 0 && r.legion >= r.witness) changed = addAlert(ctx, "legion_win", `Agents vivants (${r.legion}) ≥ Témoins vivants (${r.witness}) : victoire immédiate de la Légion.`) || changed;
+  if (r.legion > 0 && r.legion >= r.others) changed = addAlert(ctx, "legion_win", `Agents vivants (${r.legion}) ≥ non-Légion vivants (${r.others}) : victoire immédiate de la Légion.`) || changed;
   if (changed) {
     await saveFlags(ctx);
-    await log(ctx, "victory_alert", { legion: r.legion, witness: r.witness });
+    await log(ctx, "victory_alert", { legion: r.legion, others: r.others });
   }
+}
+
+export const VICTORY_ALERTS = ["legion_win", "witness_win"];
+
+/** MJ : réponse à une alerte. « verdict » n'est possible que pour une victoire immédiate. */
+export async function mjDecideAlert(database: Database, kind: string, decision: "continue" | "verdict") {
+  return withGame(database, async (ctx) => {
+    const alert = (ctx.game.flags.alerts ?? []).find((a) => a.kind === kind);
+    if (!alert) throw new GameError("Alerte introuvable", 404);
+    if (alert.decision) throw new GameError("Alerte déjà traitée.");
+    if (decision === "verdict" && !VICTORY_ALERTS.includes(kind)) throw new GameError("Cette alerte ne permet pas de passer au verdict.");
+    alert.decision = decision;
+    alert.decidedAt = ctx.now;
+    await saveFlags(ctx);
+    await log(ctx, "mj_alert_decision", { kind, decision });
+    if (decision === "verdict") await jumpToVerdict(ctx);
+    return { ok: true };
+  });
+}
+
+/**
+ * Saut direct à la phase verdict : le conseil éventuel est clos, les événements restants sont annulés,
+ * sauf la finale, replanifiée avec le même écart qu'initialement après le verdict.
+ */
+async function jumpToVerdict(ctx: Ctx) {
+  if (ctx.game.phase === "verdict" || ctx.game.phase === "finale") throw new GameError("Le verdict a déjà commencé.");
+  const council = await openCouncil(ctx.db);
+  if (council) {
+    await ctx.db.query("update councils set stage = 'closed', stage_ends_at = $1, closed_at = $1 where id = $2", [ctx.now, council.id]);
+    await log(ctx, "council_closed", { council: council.id, reason: "verdict" });
+  }
+  const pending = await ctx.db.query<EventRow>("select * from scheduled_events where status = 'pending'");
+  const verdict = pending.find((e) => e.kind === "phase" && e.payload.phase === "verdict");
+  const finale = pending.find((e) => e.kind === "phase" && e.payload.phase === "finale");
+  const gap = verdict && finale ? Math.max(0, finale.at - verdict.at) : 10 * 60;
+  for (const e of pending) {
+    if (e === verdict || e === finale) continue;
+    await ctx.db.query("update scheduled_events set status = 'cancelled', done_at = $1, note = 'passage au verdict' where id = $2", [ctx.now, e.id]);
+  }
+  if (verdict) await ctx.db.query("update scheduled_events set at = $1 where id = $2", [ctx.now, verdict.id]);
+  else await ctx.db.query("insert into scheduled_events (kind, label, at, payload) values ('phase', 'Verdict', $1, '{\"phase\":\"verdict\"}'::jsonb)", [ctx.now]);
+  if (finale) await ctx.db.query("update scheduled_events set at = $1 where id = $2", [ctx.now + gap, finale.id]);
+  else await ctx.db.query("insert into scheduled_events (kind, label, at, payload) values ('phase', 'Finale', $1, '{\"phase\":\"finale\"}'::jsonb)", [ctx.now + gap]);
+  await log(ctx, "jump_to_verdict", { finaleAt: ctx.now + gap });
+  ctx.notify.everyone = ctx.notify.screen = true;
+  await runTick(ctx);
 }

@@ -17,9 +17,22 @@ export interface GameRow {
   conclave_cooldown_until: number;
   kills_open: boolean;
   mission_progress: number;
-  flags: { alerts?: { kind: string; at: number; text: string }[]; thresholds?: number[] } & Record<string, unknown>;
+  flags: { alerts?: Alert[]; thresholds?: number[] } & Record<string, unknown>;
   channel_secrets: { mj?: string; legion?: string; spirits?: string };
   last_tick_at: Date | null;
+}
+
+/**
+ * Alerte MJ. Les victoires immédiates (legion_win, witness_win) attendent une décision :
+ * « continue » (la partie continue) ou « verdict » (saut à la phase verdict puis finale).
+ * L'écran n'annonce rien tant que le MJ n'a pas choisi.
+ */
+export interface Alert {
+  kind: string;
+  at: number;
+  text: string;
+  decision?: "continue" | "verdict";
+  decidedAt?: number;
 }
 
 export interface PlayerRow {

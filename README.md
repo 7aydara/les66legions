@@ -24,7 +24,7 @@ Plateforme du jeu grandeur nature d'Halloween (30 joueurs + 1 MJ). La spécifica
   - le tableau des joueurs, avec tuer, ressusciter et changer de rôle ;
   - la timeline (décaler, déclencher, annuler) ;
   - les réglages, le forçage de l'écran et le journal ;
-  - les alertes de victoire immédiate.
+  - les alertes de victoire immédiate, avec « Continuer » ou « Passer au verdict ».
 - `npm run qr` : PDF d'impression de tous les QR codes. `npm run bots` : partie simulée de bout en bout.
 
 Le v2 couvre les pouvoirs, les châtiments, les Esprits et le Médium, les Éclipses, les indices, les missions éclair, les fragments et le verdict. Le v3 couvre les animations, les sons, le bouton « Cacher » et la robustesse.
@@ -40,6 +40,17 @@ Le v2 couvre les pouvoirs, les châtiments, les Esprits et le Médium, les Écli
   - en v2, les votes contre un Baal invisible compteront comme « personne ».
 - **Glas** : « Corps signalé par X » / « Cloche sonnée par X » ; tous les corps sont listés ; un conseil d'office affiche « Le conseil de minuit est convoqué ».
 - **Écran** : les corps pas encore découverts comptent parmi les vivants, pour que l'écran ne trahisse pas un meurtre.
+- **Missions** : celles de tout joueur non-Légion comptent (Témoins et Neutres). Les réponses de la Légion sont enregistrées mais ne comptent jamais. Les Esprits ne font que E1–E4, jamais les missions de zone.
+- **Conseils d'office** : un conseil d'office est sauté si un conseil est en cours ou s'est clos dans les 10 min. **L'Accusation n'est jamais sautée** : si un conseil est en cours, elle démarre dès sa clôture.
+- **Victoires immédiates** :
+  - Témoins : plus aucun agent vivant ;
+  - Légion : agents vivants ≥ non-Légion vivants (Témoins + Neutres, évacués et exilés inclus).
+
+  Elles n'arrêtent jamais la partie. Le panneau MJ affiche une alerte avec deux boutons :
+  - « Continuer » ;
+  - « Passer au verdict » : le conseil en cours est clos, les événements restants sont annulés, le verdict commence tout de suite et la finale suit 10 min plus tard.
+
+  L'écran n'annonce rien. L'alerte « Judas expulsé » propose seulement « Vu ».
 
 ### Choix techniques
 
@@ -96,6 +107,7 @@ Dans un second terminal :
 npm run bots                     # 30 joueurs
 BOT_PLAYERS=24 npm run bots      # 24 joueurs (4 agents)
 BOT_SEED=42 npm run bots         # partie rejouable
+BOT_ON_VICTORY=verdict npm run bots   # le MJ choisit « Passer au verdict » à la 1re victoire immédiate (défaut : « Continuer »)
 ```
 
 Le script :

@@ -5,6 +5,9 @@ import type { mjView } from "@/lib/game/views";
 import { ROLES } from "@/content/roles";
 import { DEFAULT_SETTINGS, type SettingKey } from "@/lib/game/settings";
 
+// Dupliqué de lib/game/engine.ts (module serveur, non importable côté client).
+const VICTORY_ALERTS = ["legion_win", "witness_win"];
+
 type MV = Awaited<ReturnType<typeof mjView>>;
 
 export default function Mj() {
@@ -57,7 +60,25 @@ export default function Mj() {
         </div>
       </header>
       {err && <div className="rounded bg-blood/40 p-3">{err}</div>}
-      {d.alerts.map((a) => <div key={a.kind} className="rounded border border-gold bg-gold/10 p-3 text-gold">⚠ T+{fmt(a.at)} — {a.text}</div>)}
+      {d.alerts.map((a) => (
+        <div key={a.kind} className={`flex flex-wrap items-center gap-3 rounded border p-3 ${a.decision ? "border-white/10 opacity-60" : "border-gold bg-gold/10 text-gold"}`}>
+          <span className="flex-1">⚠ T+{fmt(a.at)} — {a.text}</span>
+          {a.decision ? (
+            <span>{a.decision === "verdict" ? "→ passage au verdict" : "→ la partie continue"} (T+{fmt(a.decidedAt ?? a.at)})</span>
+          ) : (
+            <>
+              <button className="btn" onClick={() => call("alert", { kind: a.kind, decision: "continue" })}>
+                {VICTORY_ALERTS.includes(a.kind) ? "Continuer" : "Vu"}
+              </button>
+              {VICTORY_ALERTS.includes(a.kind) && (
+                <button className="btn-blood" onClick={() => call("alert", { kind: a.kind, decision: "verdict" }, "Passer directement au verdict ? Les événements restants seront annulés.")}>
+                  Passer au verdict
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ))}
 
       {!d.clock.launched && <RolesPanel d={d} call={call} count={bound.length} />}
 

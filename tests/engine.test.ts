@@ -253,12 +253,66 @@ describe("partie", () => {
     expect(v.log.filter((l) => l.kind === "phase" && (l.payload as { phase: string }).phase === "act1")).toHaveLength(1);
   });
 
-  it("victoire immédiate de la Légion signalée au MJ", async () => {
+  it("parité : la Légion gagne seulement si agents vivants ≥ non-Légion vivants (Neutres inclus)", async () => {
     await E.launch(db);
     await advance(7 * 60, 30);
-    const witnesses = (await players()).filter((p) => p.camp === "witness");
-    for (const w of witnesses.slice(0, 18)) await E.mjKill(db, w.id);
-    expect((await mjView(db)).alerts.map((a) => a.kind)).toContain("legion_win");
+    const nonLegion = (await players()).filter((p) => p.camp !== "legion");
+    expect(nonLegion).toHaveLength(25);
+    // 18 Témoins morts : il reste 4 Témoins + 3 Neutres = 7 non-Légion > 5 agents → pas d'alerte.
+    for (const w of nonLegion.filter((p) => p.camp === "witness").slice(0, 18)) await E.mjKill(db, w.id);
+    expect((await mjView(db)).alerts).toHaveLength(0);
+    for (const p of (await players()).filter((p) => p.camp !== "legion" && p.status === "alive").slice(0, 2)) await E.mjKill(db, p.id);
+    const alerts = (await mjView(db)).alerts;
+    expect(alerts.map((a) => a.kind)).toEqual(["legion_win"]);
+    expect(alerts[0].decision).toBeUndefined();
+    // L'écran n'annonce rien tant que le MJ n'a pas choisi.
+    expect(JSON.stringify(await screenView(db))).not.toMatch(/victoire|legion_win/i);
+  });
+
+  it("victoire immédiate → « Continuer » : la partie suit sa timeline", async () => {
+    await E.launch(db);
+    await advance(7 * 60, 30);
+    for (const p of (await players()).filter((p) => p.camp === "legion")) await E.mjKill(db, p.id);
+    expect((await mjView(db)).alerts.map((a) => a.kind)).toEqual(["witness_win"]);
+    await expect(E.mjDecideAlert(db, "witness_win", "continue")).resolves.toBeTruthy();
+    await expect(E.mjDecideAlert(db, "witness_win", "verdict")).rejects.toThrow(/déjà/);
+    await advance(60);
+    const v = await mjView(db);
+    expect(v.clock.phase).toBe("act1");
+    expect(v.alerts[0].decision).toBe("continue");
+  });
+
+  it("victoire immédiate → « Passer au verdict » : verdict maintenant, finale 10 min après", async () => {
+    await E.launch(db);
+    await advance(30 * 60, 30);
+    await E.ringBell(db, (await byRole("notaire")).token); // un conseil en cours est clos par le saut
+    for (const p of (await players()).filter((p) => p.camp === "legion")) await E.mjKill(db, p.id);
+    await E.mjDecideAlert(db, "witness_win", "verdict");
+    let v = await mjView(db);
+    expect(v.clock.phase).toBe("verdict");
+    expect(v.council).toBeNull();
+    expect(v.events.filter((e) => e.status === "pending").map((e) => e.label)).toEqual(["Finale"]);
+    expect(v.events.find((e) => e.label === "Acte 2")?.status).toBe("cancelled");
+    await advance(10 * 60, 30);
+    v = await mjView(db);
+    expect(v.clock.phase).toBe("finale");
+  });
+
+  it("Judas expulsé avant l'acte 3 : alerte « Vu » seulement, pas de passage au verdict", async () => {
+    await E.launch(db);
+    await advance(7 * 60, 30);
+    const judas = await byRole("judas");
+    await E.ringBell(db, (await byRole("notaire")).token);
+    await advance(S.glasDuration + S.debateDuration);
+    for (const p of (await players()).filter((p) => p.status === "alive" && p.id !== judas.id)) {
+      await E.vote(db, tokens[p.badge], judas.badge);
+    }
+    await advance(S.voteDuration + S.countDuration + S.templarWindow + S.expulsionDuration);
+    expect((await byRole("judas")).status).toBe("spirit");
+    expect((await mjView(db)).alerts.map((a) => a.kind)).toEqual(["judas_win"]);
+    await expect(E.mjDecideAlert(db, "judas_win", "verdict")).rejects.toThrow(/ne permet pas/);
+    await E.mjDecideAlert(db, "judas_win", "continue");
+    expect((await mjView(db)).alerts[0].decision).toBe("continue");
   });
 });
 
