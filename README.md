@@ -169,6 +169,10 @@ Régénère le PDF dès que le domaine définitif est connu.
 
 > Le soir de la partie, le panneau MJ doit rester ouvert : c'est lui qui appelle `/api/tick` chaque seconde.
 
+Les fonctions Vercel sont placées à Paris (`cdg1`, dans `vercel.json`), à côté d'une base Supabase en `eu-west-3`. Si la base est ailleurs, adapte la région.
+
+Avant la soirée, faire un test sur vrais téléphones : voir [`docs/checklist-test-telephones.md`](docs/checklist-test-telephones.md).
+
 ## Arborescence
 
 ```
