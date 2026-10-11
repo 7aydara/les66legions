@@ -1,12 +1,18 @@
 // Résolution des QR codes (§8) selon qui scanne.
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/lib/api";
+import { db, json } from "@/lib/api";
+import { GameError } from "@/lib/game/errors";
 import { PLAYER_COOKIE, playerToken, setPlayerCookie } from "@/lib/auth";
 import { bindBadge, playerByToken } from "@/lib/game/engine";
 
 export async function GET(req: NextRequest, ctx: RouteContext<"/q/[code]">) {
   const code = decodeURIComponent((await ctx.params).code).trim().toUpperCase();
-  const database = await db();
+  let database;
+  try {
+    database = await db();
+  } catch (e) {
+    return json({ error: e instanceof GameError ? e.message : "Erreur serveur" }, 503);
+  }
   const to = (path: string) => NextResponse.redirect(new URL(path, req.url), 303);
   const isBadge = /^B\d{2}$/.test(code);
 
