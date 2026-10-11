@@ -184,6 +184,17 @@ Régénère le PDF dès que le domaine définitif est connu.
 6. Génère les QR avec l'URL de prod (`npm run qr`) et imprime.
 7. Pour une répétition sur le déploiement : ajoute temporairement `ALLOW_TIME_WARP=1`, puis lance `BOT_BASE_URL=https://… MJ_PASSWORD=… npm run bots`.
 
+### Mot de passe du panneau MJ
+
+Par défaut, c'est la variable `MJ_PASSWORD`. Pour le changer sans toucher à Vercel ni redéployer :
+
+```bash
+DATABASE_URL=… npm run mj:password -- "nouveau-mot-de-passe"   # stocké haché (scrypt) dans app_config
+DATABASE_URL=… npm run mj:password -- --clear                   # revient à MJ_PASSWORD
+```
+
+La valeur en base est prioritaire et prise en compte en 30 s au plus. Changer le mot de passe déconnecte le MJ.
+
 > Le soir de la partie, le panneau MJ doit rester ouvert : c'est lui qui appelle `/api/tick` chaque seconde.
 
 Les fonctions Vercel sont placées à Paris (`cdg1`, dans `vercel.json`), à côté d'une base Supabase en `eu-west-3`. Si la base est ailleurs, adapte la région.
